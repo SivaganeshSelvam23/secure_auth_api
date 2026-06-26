@@ -6,6 +6,9 @@ const PORT = process.env.PORT || 5000;
 
 const startServer = async () => {
   try {
+    if (!process.env.JWT_SECRET) {
+      throw new Error("JWT_SECRET is missing.");
+    }
     const result = await pool.query("SELECT NOW()");
 
     console.log("PostgreSQL connected successfully.");

@@ -1,6 +1,7 @@
 //Loads the Express package.
 import express from "express";
-
+import authRoutes from "./routes/authRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 //This creates the Express application.
 const app = express();
 
@@ -13,5 +14,8 @@ app.get("/", (req, res) => {
     message: "secure auth api is running.",
   });
 });
+
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 
 export default app;
