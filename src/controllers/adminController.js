@@ -2,7 +2,22 @@ import pool from "../config/db.js";
 
 export const getAllUsers = async (req, res) => {
   try {
-    const result = await pool.query(
+    const page = Number(req.query.page ?? 1);
+    const limit = Number(req.query.limit ?? 10);
+    if (!Number.isInteger(page) || page <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Page must be a positive integer.",
+      });
+    }
+    if (!Number.isInteger(limit) || limit <= 0 || limit > 100) {
+      return res.status(400).json({
+        success: false,
+        message: "Limit must be an integer between 1 and 100.",
+      });
+    }
+    const offset = (page - 1) * limit;
+    const usersResult = await pool.query(
       `
         SELECT
           id,
@@ -14,13 +29,31 @@ export const getAllUsers = async (req, res) => {
           updated_at
         FROM users
         ORDER BY id ASC
+        LIMIT $1
+        OFFSET $2
+      `,
+      [limit, offset],
+    );
+    const countResult = await pool.query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM users
       `,
     );
+    const totalUsers = countResult.rows[0].total;
+    const totalPages = Math.ceil(totalUsers / limit);
 
     return res.status(200).json({
       success: true,
-      count: result.rows.length,
-      users: result.rows,
+      pagination: {
+        page,
+        limit,
+        totalUsers,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+      users: usersResult.rows,
     });
   } catch (error) {
     console.error("Failed to fetch users:", error);
