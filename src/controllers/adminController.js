@@ -16,7 +16,64 @@ export const getAllUsers = async (req, res) => {
         message: "Limit must be an integer between 1 and 100.",
       });
     }
+    const search =
+      typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const role =
+      typeof req.query.role === "string"
+        ? req.query.role.trim().toLowerCase()
+        : "";
+    const isActive = req.query.isActive;
+    const allowedRoles = ["user", "admin"];
+    if (role && !allowedRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Role must be either user or admin.",
+      });
+    }
+    let parsedIsActive;
+    if (isActive !== undefined) {
+      if (isActive !== "true" && isActive !== "false") {
+        return res.status(400).json({
+          success: false,
+          message: "isActive must be true or false.",
+        });
+      }
+      parsedIsActive = isActive === "true";
+    }
     const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const values = [];
+    let parameterIndex = 1;
+
+    if (search) {
+      conditions.push(
+        `(name ILIKE $${parameterIndex} OR email ILIKE $${parameterIndex})`,
+      );
+      values.push(`%${search}%`);
+      parameterIndex++;
+    }
+
+    if (role) {
+      conditions.push(`role = $${parameterIndex}`);
+      values.push(role);
+      parameterIndex++;
+    }
+
+    if (parsedIsActive !== undefined) {
+      conditions.push(`is_active = $${parameterIndex}`);
+      values.push(parsedIsActive);
+      parameterIndex++;
+    }
+
+    const whereClause =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+    const limitParameter = parameterIndex;
+    const offsetParameter = parameterIndex + 1;
+
+    const usersQueryValues = [...values, limit, offset];
+
     const usersResult = await pool.query(
       `
         SELECT
@@ -28,23 +85,31 @@ export const getAllUsers = async (req, res) => {
           created_at,
           updated_at
         FROM users
+        ${whereClause}
         ORDER BY id ASC
-        LIMIT $1
-        OFFSET $2
+        LIMIT $${limitParameter}
+        OFFSET $${offsetParameter}
       `,
-      [limit, offset],
+      usersQueryValues,
     );
     const countResult = await pool.query(
       `
         SELECT COUNT(*)::int AS total
         FROM users
+        ${whereClause}
       `,
+      values,
     );
     const totalUsers = countResult.rows[0].total;
     const totalPages = Math.ceil(totalUsers / limit);
 
     return res.status(200).json({
       success: true,
+      filters: {
+        search: search || null,
+        role: role || null,
+        isActive: parsedIsActive !== undefined ? parsedIsActive : null,
+      },
       pagination: {
         page,
         limit,
