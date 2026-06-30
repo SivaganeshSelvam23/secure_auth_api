@@ -1,5 +1,5 @@
 import pool from "../config/db.js";
-
+import bcrypt from "bcrypt";
 export const getMyProfile = async (req, res) => {
   try {
     const userId = req.user.userId;
@@ -187,6 +187,136 @@ export const updateMyProfile = async (req, res) => {
       });
     }
     console.log("Failed to update profile:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error.",
+    });
+  }
+};
+
+export const changeMyPassword = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    const allowedFields = ["currentPassword", "newPassword"];
+
+    const receivedFields = Object.keys(req.body);
+
+    const invalidFields = receivedFields.filter(
+      (field) => !allowedFields.includes(field),
+    );
+
+    if (invalidFields.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `These fields are not allowed: ${invalidFields.join(", ")}`,
+      });
+    }
+
+    if (currentPassword === undefined || newPassword === undefined) {
+      res.status(400).json({
+        success: false,
+        message: "Current password and new password are required.",
+      });
+    }
+
+    if (
+      typeof currentPassword !== "string" ||
+      typeof newPassword !== "string"
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords must be strings. ",
+      });
+    }
+
+    if (currentPassword.length === 0 || newPassword === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Password can't be empty.",
+      });
+    }
+
+    if (newPassword.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must contain at least 8 characters.",
+      });
+    }
+
+    const userResult = await pool.query(
+      `
+        SELECT 
+          id,
+          password_hash,
+          is_active
+        FROM users
+        WHERE id = $1
+      `,
+      [userId],
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found.",
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is disabled.",
+      });
+    }
+
+    const isCurrentPasswordCorrect = await bcrypt.compare(
+      currentPassword,
+      user.password_hash,
+    );
+
+    if (!isCurrentPasswordCorrect) {
+      return res.status(401).json({
+        success: false,
+        message: "Current password is incorrect.",
+      });
+    }
+
+    const isSamePassword = await bcrypt.compare(
+      newPassword,
+      user.password_hash,
+    );
+
+    if (isSamePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from the current password.",
+      });
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 12);
+
+    await pool.query(
+      `
+        UPDATE users
+        SET
+          password_hash = $1,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `,
+      [newPasswordHash, userId],
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Password changed successfully.",
+    });
+  } catch (error) {
+    console.log("Failed to change password:", error);
+
     return res.status(500).json({
       success: false,
       message: "Internal server error.",
