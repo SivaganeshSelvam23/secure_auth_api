@@ -3,6 +3,7 @@ import express from "express";
 import authRoutes from "./routes/authRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import adminRoutes from "./routes/adminRoutes.js";
+import { errorHandler } from "./middlewares/errorHandler.js";
 //This creates the Express application.
 const app = express();
 
@@ -20,6 +21,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 
+app.get("/api/test-error", (req, res, next) => {
+  const error = new Error("This is a test error bhai don't get panic.😂");
+
+  next(error);
+});
+
 // Must stay after all valid routes
 app.use((req, res) => {
   return res.status(404).json({
@@ -27,5 +34,7 @@ app.use((req, res) => {
     message: `Route ${req.method} ${req.originalUrl} not found.`,
   });
 });
+
+app.use(errorHandler);
 
 export default app;
