@@ -21,10 +21,18 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 
-app.get("/api/test-error", (req, res, next) => {
-  const error = new Error("This is a test error bhai don't get panic.😂");
+app.get("/api/practice", (req, res, next) => {
+  const shouldFail = true;
+  if (shouldFail) {
+    const error = new Error("Practice error");
 
-  next(error);
+    return next(error);
+  }
+
+  return res.status(200).json({
+    success: true,
+    message: "Everything worked.",
+  });
 });
 
 // Must stay after all valid routes
